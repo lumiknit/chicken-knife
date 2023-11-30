@@ -1,0 +1,20 @@
+[package]
+name = "chicken-knife"
+version = "0.1.0"
+edition = "2021"
+authors = ["lumiknit <aasr4r4@gmail.com>"]
+description = "Light-weight text editing utility based on stack-based language"
+license = "MIT"
+repository = "https://github.com/lumiknit/chicken-knife"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+indoc = "2"
+
+[profile.release]
+strip = true
+lto = true
+opt-level = "z"
+codegen-units = 1
+panic = "abort"
