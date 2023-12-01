@@ -10,15 +10,16 @@
  *
  */
 
+use ctrlc;
 use indoc::indoc;
-use std::{collections::HashMap, fs::File, io::Read, process::exit, rc::Rc, str::Chars, char};
+use std::{char, collections::HashMap, fs::File, io::Read, iter::Peekable, process::exit, rc::Rc, str::Chars};
+use std::io::{Write};
 
 // Based on ck.c
 
 fn print_help_and_exit() {
     println!(
-        indoc! {
-        "
+        indoc! {"
             {} {}
             A simple & light-weight stack-based text processor
 
@@ -31,7 +32,7 @@ fn print_help_and_exit() {
             -f <file>\tFile for initial buffer content
             -h       \tPrint this help message and exit
             -v       \tPrint version and exit
-            "},
+        "},
         env!("CARGO_PKG_VERSION"),
         env!("CARGO_PKG_NAME")
     );
@@ -49,61 +50,13 @@ fn print_version_and_exit() {
     exit(0);
 }
 
-// Arguments
-
-struct CliArgs {
-    interactive: bool,
-    code: String,
-    init_filename: String,
-}
-
-fn parse_args() -> CliArgs {
-    let mut cli = CliArgs {
-        interactive: false,
-        code: String::new(),
-        init_filename: String::new(),
-    };
-
-    let mut i = 1;
-    let mut args = std::env::args();
-    while i < args.len() {
-        match args.nth(i).unwrap().as_ref() {
-            "-i" => cli.interactive = true,
-            "-c" => {
-                i += 1;
-                cli.code.push('\n');
-                cli.code.push_str(args.nth(i).unwrap().as_ref());
-            }
-            "-f" => {
-                i += 1;
-                cli.init_filename = args.nth(i).unwrap().clone();
-            }
-            "-h" => print_help_and_exit(),
-            "-v" => print_version_and_exit(),
-            s => {
-                if s.starts_with("-") {
-                    eprintln!("Unknown option: {}", s);
-                    exit(1);
-                }
-                // Read file, name s
-                let mut file =
-                    File::open(s).unwrap_or_else(|_| panic!("Failed to open file: {}", s));
-                cli.code.push('\n');
-                file.read_to_string(&mut cli.code).unwrap();
-            }
-        }
-        i += 1;
-    }
-
-    cli
-}
-
 // Symbol Table
 
 type SymbolId = u32;
 
 // Value
 
+#[derive(Debug)]
 enum Literal {
     Nil,
     Int(i64),
@@ -111,6 +64,7 @@ enum Literal {
     Str(String),
 }
 
+#[derive(Debug)]
 enum Value {
     Lit(Literal),
     Cons(Rc<Value>, Rc<Value>),
@@ -118,16 +72,19 @@ enum Value {
     Func(Func),
 }
 
+#[derive(Debug)]
 enum Instr {
     Load(SymbolId), // Load from global table
     App(SymbolId),  // Load function from global table and apply
     Set(SymbolId),  // Pop and set to global table
 }
 
+#[derive(Debug)]
 struct Func {
     instrs: Vec<Instr>,
 }
 
+#[derive(Debug)]
 enum Magic {
     Add,
     Sub,
@@ -203,14 +160,21 @@ impl VM {
         }
     }
 
+    fn load_buffer_file(&mut self, filename: &str) -> std::io::Result<()> {
+		let mut f: File = File::open(filename)?;
+		let mut s = String::new();
+		f.read_to_string(&mut s).unwrap();
+		Ok(())
+	}
+
     fn run(&mut self) {}
 }
 
 // Parse
 
 struct Parser<'vm> {
-    vm: &'vm mut VM, // Destination VM
-    partial: String, // Partial code
+    vm: &'vm mut VM,            // Destination VM
+    partial: String,            // Partial code
     partial_f: Vec<Vec<Instr>>, // Partial function
 }
 
@@ -221,16 +185,23 @@ fn is_special_char(c: char) -> bool {
     }
 }
 
-fn skip_whitespace(chars: &mut Chars) {
-    chars.find(|c| !c.is_whitespace());
+fn skip_whitespace(chars: &mut Peekable<Chars>) {
+	while let Some(c) = chars.peek() {
+		if !c.is_whitespace() {
+			break;
+		}
+		chars.next();
+	}
 }
 
-fn parse_string(chars: &mut Chars) -> Result<String, Option<String>> {
+fn parse_string(chars: &mut Peekable<Chars>) -> Result<String, Option<String>> {
     // Check open
     let open = chars.next().unwrap();
     let mut open_n = 1;
-    while let Some(c) = chars.nth(0) {
-        if c != open { break; }
+    while let Some(c) = chars.peek() {
+        if *c != open {
+            break;
+        }
         open_n += 1;
         chars.next();
     }
@@ -240,8 +211,10 @@ fn parse_string(chars: &mut Chars) -> Result<String, Option<String>> {
         if c == open {
             // Check close
             let mut close_n = 1;
-            while let Some(c) = chars.nth(0) {
-                if c != open { break; }
+            while let Some(c) = chars.peek() {
+                if *c != open {
+                    break;
+                }
                 close_n += 1;
                 chars.next();
             }
@@ -271,13 +244,13 @@ impl Parser<'_> {
         }
     }
 
-    fn parse_all(&mut self) {
-        let mut chars = self.partial.chars();
+    fn parse_all(&mut self) -> Result<Func, Option<String>> {
+        let mut chars = self.partial.chars().peekable();
         let mut f = Vec::new();
         loop {
             skip_whitespace(&mut chars);
-            if let Some(c) = chars.nth(0) {
-                match c {
+            if let Some(c) = chars.peek() {
+                match *c {
                     // Comment
                     '#' => {
                         // Skip until newline
@@ -286,24 +259,15 @@ impl Parser<'_> {
                     // String
                     '\'' | '"' | '`' => {
                         // Save position
-                        let nchars = chars.clone();
-                        match parse_string(&mut chars) {
-                            Ok(s) => {
-                                // Push string into global
-                                let id = self.vm.alloc_id();
-                                self.vm.global[id as usize] = Value::Lit(Literal::Str(s));
-                                f.push(Instr::Load(id));
-                            }
-                            Err(None) => {
-                                // No closing
-                                chars = nchars;
-                                break;
-                            }
-                            Err(Some(s)) => {
-                                // Error occurred
-                                panic!("ParsingError: {}", s);
-                            }
-                        }
+                        let mut nchars = chars.clone();
+                        let s = parse_string(&mut nchars)?;
+                        println!("str: '{}'", s);
+                        // Push string into global
+                        let id = self.vm.alloc_id();
+                        self.vm.global[id as usize] = Value::Lit(Literal::Str(s));
+                        f.push(Instr::Load(id));
+                        // Skip
+                        chars = nchars;
                     }
                     '(' => {
                         // Parse function
@@ -315,7 +279,9 @@ impl Parser<'_> {
                         // Pack function
                         let func = Func { instrs: f };
                         // Pop function
-                        f = self.partial_f.pop()
+                        f = self
+                            .partial_f
+                            .pop()
                             .unwrap_or_else(|| panic!("ParsingError: Unexpected ')'"));
                         let id = self.vm.alloc_id();
                         self.vm.global[id as usize] = Value::Func(func);
@@ -324,13 +290,13 @@ impl Parser<'_> {
                     _ => {
                         // Otherwise, gather until special character
                         let mut s = String::new();
-                        s.push(c);
-                        while let Some(c) = chars.nth(0) {
-                            if is_special_char(c) {
+                        while let Some(c) = chars.peek() {
+                            if is_special_char(*c) {
                                 break;
                             }
-                            s.push(c);
+                            s.push(chars.next().unwrap());
                         }
+                        println!("id: '{}'", s);
                         if s.starts_with("$=") {
                             // Set global
                             let id = self.vm.get_id(&s[2..]);
@@ -343,11 +309,13 @@ impl Parser<'_> {
                             // Push number into global
                             let id = self.vm.alloc_id();
                             self.vm.global[id as usize] = Value::Lit(Literal::Int(n));
+                            println!("int: {}", n);
                             f.push(Instr::Load(id));
                         } else if let Ok(n) = s.parse::<f64>() {
                             // Push number into global
                             let id = self.vm.alloc_id();
                             self.vm.global[id as usize] = Value::Lit(Literal::Float(n));
+                            println!("float: {}", n);
                             f.push(Instr::Load(id));
                         } else {
                             // Push symbol into global
@@ -361,22 +329,101 @@ impl Parser<'_> {
             }
         }
         self.partial = chars.collect();
+        Ok(Func { instrs: f })
     }
 
-    fn parse(&mut self, code: &str) -> bool {
+    fn parse(&mut self, code: &str) -> Result<Func, Option<String>> {
         // Create new string from partial code and code
         self.partial.push_str(code);
-        self.parse_all();
-        false
+        println!("code: '{}'", self.partial);
+        self.parse_all()
     }
 }
 
-fn main() {
-    let cli = parse_args();
-    println!("Interactive: {}", cli.interactive);
-    let mut vm = VM::new();
-    let mut parser = Parser::new(&mut vm);
-    if !cli.code.is_empty() {
-        parser.parse(&cli.code);
+// Parsing args and run
+
+fn execute_code(vm: &mut VM, filename: String, code: String) {
+	let mut parser = Parser::new(vm);
+	parser.parse(&code);
+	vm.run();
+}
+
+fn run_interactive(vm: &mut VM) {
+	// Interactive mode
+	loop {
+		let mut parser = Parser::new(vm);
+		let f = loop {
+			eprint!("> ");
+			std::io::stdout().flush().unwrap();
+			let mut buf = String::new();
+			std::io::stdin().read_line(&mut buf).unwrap();
+			match parser.parse(buf.as_str()) {
+				Ok(f) => { break f; }
+				Err(None) => {
+					// Incomplete
+					eprintln!("Incomplete");
+				}
+				Err(Some(e)) => {
+					eprintln!("{}", e);
+				}
+			}
+		};
+		println!("Run: {:?}", f);
+		vm.run();
+	}
+}
+
+fn run_with_args(vm: &mut VM, mut args: std::env::Args) {
+	let mut code_executed = false;
+	let mut interactive = false;
+    args.next();
+    let mut args = args.enumerate();
+    while let Some(a) = args.next() {
+        match a.1.as_ref() {
+            "-i" => interactive = true,
+            "-c" => {
+            	let (i, filename) = args.next().expect("Filename missing");
+                code_executed = true;
+                execute_code(vm, format!("<arg-{}>", i), filename);
+            }
+            "-f" => {
+           		let (i, filename) = args.next().expect("Filename missing");
+                if let Err(_) = vm.load_buffer_file(filename.as_str()) {
+                	eprintln!("Failed to load buffer file: {}", filename);
+					exit(1);
+                }
+            }
+            "-h" => print_help_and_exit(),
+            "-v" => print_version_and_exit(),
+            s => {
+                if s.starts_with("-") {
+                    eprintln!("Unknown option: {}", s);
+                    exit(1);
+                }
+                // Read file, name s
+                let mut file =
+                    File::open(s).unwrap_or_else(|_| panic!("Failed to open file: {}", s));
+                let mut code = String::new();
+                file.read_to_string(&mut code).unwrap();
+                code_executed = true;
+                execute_code(vm, s.to_string(), code);
+            }
+        }
     }
+    if !code_executed || interactive {
+		run_interactive(vm);
+	}
+}
+
+// Main
+
+fn main() {
+    ctrlc::set_handler(move || {
+        println!("Interrupted");
+        std::process::exit(0);
+    })
+    .expect("Cannot setting Ctrl-C Handler");
+
+    let mut vm = VM::new();
+    run_with_args(&mut vm, std::env::args());
 }

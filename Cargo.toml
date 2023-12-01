@@ -11,6 +11,11 @@ repository = "https://github.com/lumiknit/chicken-knife"
 
 [dependencies]
 indoc = "2"
+ctrlc = "3.4"
+
+[[bin]]
+name = "ck"
+path = "src/main.rs"
 
 [profile.release]
 strip = true
