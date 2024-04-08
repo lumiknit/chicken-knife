@@ -1,0 +1,32 @@
+{
+	"name": "chicken-knife",
+	"private": true,
+	"version": "0.0.0",
+	"type": "module",
+	"scripts": {
+		"dev": "vite",
+		"build": "tsc && vite build",
+		"preview": "vite preview",
+		"size-report": "vite-bundle-visualizer",
+		"format": "prettier --write .",
+		"test": "vitest"
+	},
+	"dependencies": {
+		"solid-icons": "^1.1.0",
+		"solid-js": "^1.8.15",
+		"solid-toast": "^0.5.0",
+		"sortablejs": "^1.15.2"
+	},
+	"devDependencies": {
+		"@types/sortablejs": "^1.15.8",
+		"eslint": "^8.0.0",
+		"eslint-plugin-solid": "^0.13.2",
+		"prettier": "^3.2.5",
+		"sass": "^1.74.1",
+		"typescript": "^5.2.2",
+		"vite": "^5.2.0",
+		"vite-bundle-visualizer": "^1.1.0",
+		"vite-plugin-solid": "^2.10.2",
+		"vitest": "^1.4.0"
+	}
+}
