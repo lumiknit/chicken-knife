@@ -6,6 +6,4 @@ export type Node<T> = {
 
 export type Tree<T> = {
 	root: Node<T>;
-}
-
-
+};

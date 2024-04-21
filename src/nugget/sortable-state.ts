@@ -3,7 +3,6 @@ import Sortable from "sortablejs";
 import { uId } from "../common";
 import { onCleanup, onMount } from "solid-js";
 
-
 // SortableState is a shared state for a single group of stable objects.
 
 export type SortableState = {
@@ -42,7 +41,7 @@ export const newSortableState = (): SortableState => {
 		// Events
 		onEnd: e => {
 			console.log(e);
-		}
+		},
 	};
 
 	return {
@@ -58,7 +57,7 @@ export const setSortableOnMount = (s: SortableState, g: () => HTMLElement) => {
 		sortable = new Sortable(g(), s.options);
 	});
 	onCleanup(() => {
-		if(!sortable) return;
+		if (!sortable) return;
 		sortable.destroy();
 	});
 };

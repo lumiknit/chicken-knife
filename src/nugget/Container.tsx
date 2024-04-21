@@ -11,7 +11,7 @@ type Props = {
 const Container: Component<Props> = props => {
 	let ref: HTMLDivElement;
 	let list = [];
-	for(let i = 0; i < 10; i++) {
+	for (let i = 0; i < 10; i++) {
 		list.push(i);
 	}
 
@@ -22,16 +22,18 @@ const Container: Component<Props> = props => {
 		// append to the root container
 		console.log(i());
 		ref.appendChild(i());
-	}
+	};
 
-	return <>
-	<button onClick={addItem}>Add Item</button>
-	<div ref={ref!} class="ng-container">
-
-		<For each={list}>
-			{item => <Item s={props.s} label={"" + item} />}
-		</For>
-	</div></>;
+	return (
+		<>
+			<button onClick={addItem}>Add Item</button>
+			<div ref={ref!} class="ng-container">
+				<For each={list}>
+					{item => <Item s={props.s} label={"" + item} />}
+				</For>
+			</div>
+		</>
+	);
 };
 
 export default Container;

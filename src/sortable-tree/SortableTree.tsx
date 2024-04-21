@@ -6,9 +6,7 @@ type Props = {
 };
 
 const SortableTree: Component<Props> = props => {
-	return <div>
-
-	</div>;
+	return <div class="stree-root">{props.s.getRootElem()}</div>;
 };
 
 export default SortableTree;

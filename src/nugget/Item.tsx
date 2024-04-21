@@ -9,17 +9,17 @@ type Props = {
 const Item: Component<Props> = props => {
 	const [t, setT] = createSignal(false);
 
-	return <div class="ng-item">
-		<div class="ng-item-main">
-			<span class="ng-item-icon">a</span>
-			{props.label}
-			{t() ? 'a' : 'b'}
-			<button onClick={() => setT(x => !x)}>toggle</button>
+	return (
+		<div class="ng-item">
+			<div class="ng-item-main">
+				<span class="ng-item-icon">a</span>
+				{props.label}
+				{t() ? "a" : "b"}
+				<button onClick={() => setT(x => !x)}>toggle</button>
+			</div>
+			<div class="ng-item-children">children</div>
 		</div>
-		<div class="ng-item-children">
-			children
-		</div>
-	</div>;
+	);
 };
 
 export default Item;

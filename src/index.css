@@ -10,5 +10,27 @@
 
 body {
 	margin: 0;
-  background-color: #8884;
+	background-color: #8884;
+}
+
+.stree-root {
+	border: 2px solid #f00;
+	padding: 10px;
+}
+
+.stree-item {
+}
+
+.stree-item > :nth-child(1) {
+	background-color: #444;
+	color: #fff;
+	border-radius: 8px;
+	padding: 8px 16px;
+
+	box-shadow: 0 0.5rem 0.5rem #0004;
+}
+
+.stree-children {
+	/* border: 1px solid #0f0;*/
+	padding: 8px 0 0 16px;
 }
