@@ -12,7 +12,7 @@ const SortableItem = (props: {
 	const [cnt, setCnt] = createSignal(0);
 	return (
 		<div>
-			{props.id} -{props.data}
+			<input type="text" value={props.data} />
 			<button onClick={() => setCnt(x => x + 1)}>{cnt()}</button>
 		</div>
 	);
