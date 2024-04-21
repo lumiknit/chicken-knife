@@ -1,7 +1,7 @@
 import { Accessor, Component, createSignal, Setter } from "solid-js";
 import { Node } from "./struct";
 import { render } from "solid-js/web";
-import Sortable, { SortableOptions } from "sortablejs";
+import Sortable from "sortablejs";
 import { uID } from "../common";
 
 export type NodeID = string;
@@ -45,6 +45,51 @@ export type NodeW<T> = {
 };
 
 /**
+ * Callback to convert NodeW to Node.
+ * Use with SortableTreeState#forEach or SortableTreeState#forEachDOM.
+ * @param root Root NodeW
+ * @returns [callback, getter]
+ */
+function nodeWToNodeCallback<T>(
+	root: NodeW<T>,
+): [
+	(node: NodeW<T>, index: number, parent: NodeW<T>) => void,
+	() => Node<T>[],
+] {
+	const rootChildren: Node<T>[] = [];
+	const rootNode: Node<T> = {
+		children: rootChildren,
+	} as any;
+	const map = new Map<NodeID, Node<T>>([
+		[root.id, rootNode],
+	]);
+	const callback = (node: NodeW<T>, index: number, parent: NodeW<T>) => {
+		const p = map.get(parent.id)!;
+		console.log(parent.id, p, node);
+		const n: Node<T> = {
+			data: node.data(),
+		};
+		if (node.children !== undefined) n.children = [];
+		p.children![index] = n;
+	};
+	return [callback, () => rootChildren];
+};
+
+export const DEFAULT_OPTIONS: Sortable.Options = {
+	delay: 200,
+	delayOnTouchOnly: true,
+	touchStartThreshold: 8,
+
+	animation: 150,
+	fallbackOnBody: true,
+	swapThreshold: 0.65,
+
+	multiDrag: true,
+	selectedClass: "selected",
+	avoidImplicitDeselect: false,
+};
+
+/**
  * Properties for the Sortable Tree item component.
  *
  * @typeParam T Type of the node data
@@ -53,6 +98,7 @@ type Props<T> = {
 	s: SortableTreeState<T>;
 	id: NodeID;
 	data: T;
+	setData: Setter<T>;
 };
 
 /**
@@ -76,7 +122,7 @@ export class SortableTreeState<T> {
 	 * Do not change directly after creating the state,
 	 * instead use SortableTreeState#updateOptions to change the options.
 	 */
-	options: SortableOptions;
+	options: Sortable.Options;
 
 	/** SolidJS Component which will be rendered to each sortable items */
 	itemComponent: Component<Props<T>>;
@@ -94,7 +140,7 @@ export class SortableTreeState<T> {
 	// Event handlers
 	onChange?: (self: SortableTreeState<T>) => void;
 
-	constructor(itemComponent: Component<Props<T>>, options?: SortableOptions) {
+	constructor(itemComponent: Component<Props<T>>, options?: Sortable.Options) {
 		this.id = uID();
 		this.dataAttrSortableID = "data-sortable-id";
 		this.dataAttrID = "data-id";
@@ -122,11 +168,7 @@ export class SortableTreeState<T> {
 	dispose() {
 		// Clean-up all the nodes (also remove dom and dispose)
 		for (const node of this.nodes.values()) {
-			node.dispose();
-			if (node.children) {
-				node.children.sortable.destroy();
-			}
-			node.elem.remove();
+			this.deleteNode(node);
 		}
 		this.nodes.clear();
 	}
@@ -153,7 +195,7 @@ export class SortableTreeState<T> {
 
 		const Component = this.itemComponent;
 		const dispose = render(
-			() => <Component s={this} data={data()} id={id} />,
+			() => <Component s={this} data={data()} setData={setData} id={id} />,
 			componentTarget,
 		);
 
@@ -261,12 +303,25 @@ export class SortableTreeState<T> {
 	 * Update the options of the Sortable object.
 	 * @param options New options
 	 */
-	updateOptions(options: SortableOptions) {
+	updateOptions(options: Sortable.Options) {
 		// Update options with update some options
 		this.options = {
 			...this.options,
 			...options,
 			group: this.id,
+			onEnd: (evt) => {
+				let items = evt.items;
+				if(items.length === 0) items = [evt.item];
+				const ids = items.map((item: Element) => item.getAttribute(this.dataAttrID)!);
+
+				const to = evt.to;
+				const toID = to.parentElement!.getAttribute(this.dataAttrID)!;
+
+				console.log("Items", ids);
+				console.log("onEnd", evt);
+				console.log("Data", this.convertToNodes());
+				console.log("DOM", this.convertToNodesFromDOM());
+			},
 		};
 
 		// Update options of all Sortable objects
@@ -277,6 +332,67 @@ export class SortableTreeState<T> {
 				}
 			}
 		}
+	}
+
+	/**
+	 * Traverse the tree and call the callback for each node.
+	 * @param callback Callback function
+	 */
+	forEach(callback: (node: NodeW<T>, index: number, parent: NodeW<T>) => void) {
+		const traverse = (parent: NodeW<T>) => {
+			const children = parent.children;
+			if (!children) return;
+			const n = children.w.length;
+			for(let i = 0; i < n; i++) {
+				const node = children.w[i];
+				callback(node, i, parent);
+				traverse(node);
+			}
+		};
+		traverse(this.root);
+	}
+
+	/**
+	 * Traverse the tree and call the callback for each node.
+	 * Note that this function traverse based on the DOM structure.
+	 * @param callback Callback function
+	 */
+	forEachDOM(callback: (node: NodeW<T>, index: number, parent: NodeW<T>) => void) {
+		const traverse = (parent: NodeW<T>) => {
+			const children = parent.children;
+			if(!children) return;
+			let i=0, child: Element | null = children.container.firstElementChild;
+			while(child) {
+				const nodeID = child.getAttribute(this.dataAttrID);
+				const node = this.nodes.get(nodeID!);
+				if(!node) throw new Error(`Node not found: ${nodeID}`);
+				callback(node, i, parent);
+				traverse(node);
+				child = child.nextElementSibling;
+				i++;
+			}
+		};
+		traverse(this.root);
+	}
+
+	/**
+	 * Convert the tree to Node array.
+	 * @returns Node array
+	 */
+	convertToNodes(): Node<T>[] {
+		const [callback, getter] = nodeWToNodeCallback(this.root);
+		this.forEach(callback);
+		return getter();
+	}
+
+	/**
+	 * Convert the tree to Node array based on the DOM structure.
+	 * @returns Node array
+	 */
+	convertToNodesFromDOM(): Node<T>[] {
+		const [callback, getter] = nodeWToNodeCallback(this.root);
+		this.forEachDOM(callback);
+		return getter();
 	}
 
 	/**
@@ -316,14 +432,24 @@ export class SortableTreeState<T> {
 
 	/**
 	 * Delete the given node from tree.
-	 * @param id Node ID to remove
+	 * @param node NodeW object to remove
 	 */
-	deleteNode(id: NodeID) {
-		const node = this.getNodeByID(id);
+	deleteNode(node: NodeW<T>) {
 		if (node.children) {
 			node.children.sortable.destroy();
+			for (const child of node.children.w) {
+				this.deleteNode(child);
+			}
 		}
 		node.dispose();
-		this.nodes.delete(id);
+		node.elem.remove();
+	}
+
+	/**
+	 * Delete the given node from tree.
+	 * @param id Node ID to remove
+	 */
+	deleteNodeByID(id: NodeID) {
+		this.deleteNode(this.getNodeByID(id));
 	}
 }

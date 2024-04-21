@@ -30,6 +30,10 @@ body {
 	box-shadow: 0 0.5rem 0.5rem #0004;
 }
 
+.stree-item.selected > :nth-child(1) {
+	outline: 2px solid #f00;
+}
+
 .stree-children {
 	/* border: 1px solid #0f0;*/
 	padding: 8px 0 0 16px;
