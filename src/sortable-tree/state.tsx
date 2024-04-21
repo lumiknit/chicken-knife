@@ -60,20 +60,18 @@ function nodeWToNodeCallback<T>(
 	const rootNode: Node<T> = {
 		children: rootChildren,
 	} as any;
-	const map = new Map<NodeID, Node<T>>([
-		[root.id, rootNode],
-	]);
+	const map = new Map<NodeID, Node<T>>([[root.id, rootNode]]);
 	const callback = (node: NodeW<T>, index: number, parent: NodeW<T>) => {
 		const p = map.get(parent.id)!;
-		console.log(parent.id, p, node);
 		const n: Node<T> = {
 			data: node.data(),
 		};
 		if (node.children !== undefined) n.children = [];
 		p.children![index] = n;
+		map.set(node.id, n);
 	};
 	return [callback, () => rootChildren];
-};
+}
 
 export const DEFAULT_OPTIONS: Sortable.Options = {
 	delay: 200,
@@ -140,7 +138,10 @@ export class SortableTreeState<T> {
 	// Event handlers
 	onChange?: (self: SortableTreeState<T>) => void;
 
-	constructor(itemComponent: Component<Props<T>>, options?: Sortable.Options) {
+	constructor(
+		itemComponent: Component<Props<T>>,
+		options?: Sortable.Options,
+	) {
 		this.id = uID();
 		this.dataAttrSortableID = "data-sortable-id";
 		this.dataAttrID = "data-id";
@@ -195,7 +196,9 @@ export class SortableTreeState<T> {
 
 		const Component = this.itemComponent;
 		const dispose = render(
-			() => <Component s={this} data={data()} setData={setData} id={id} />,
+			() => (
+				<Component s={this} data={data()} setData={setData} id={id} />
+			),
 			componentTarget,
 		);
 
@@ -309,10 +312,12 @@ export class SortableTreeState<T> {
 			...this.options,
 			...options,
 			group: this.id,
-			onEnd: (evt) => {
+			onEnd: evt => {
 				let items = evt.items;
-				if(items.length === 0) items = [evt.item];
-				const ids = items.map((item: Element) => item.getAttribute(this.dataAttrID)!);
+				if (items.length === 0) items = [evt.item];
+				const ids = items.map(
+					(item: Element) => item.getAttribute(this.dataAttrID)!,
+				);
 
 				const to = evt.to;
 				const toID = to.parentElement!.getAttribute(this.dataAttrID)!;
@@ -338,12 +343,14 @@ export class SortableTreeState<T> {
 	 * Traverse the tree and call the callback for each node.
 	 * @param callback Callback function
 	 */
-	forEach(callback: (node: NodeW<T>, index: number, parent: NodeW<T>) => void) {
+	forEach(
+		callback: (node: NodeW<T>, index: number, parent: NodeW<T>) => void,
+	) {
 		const traverse = (parent: NodeW<T>) => {
 			const children = parent.children;
 			if (!children) return;
 			const n = children.w.length;
-			for(let i = 0; i < n; i++) {
+			for (let i = 0; i < n; i++) {
 				const node = children.w[i];
 				callback(node, i, parent);
 				traverse(node);
@@ -357,15 +364,18 @@ export class SortableTreeState<T> {
 	 * Note that this function traverse based on the DOM structure.
 	 * @param callback Callback function
 	 */
-	forEachDOM(callback: (node: NodeW<T>, index: number, parent: NodeW<T>) => void) {
+	forEachDOM(
+		callback: (node: NodeW<T>, index: number, parent: NodeW<T>) => void,
+	) {
 		const traverse = (parent: NodeW<T>) => {
 			const children = parent.children;
-			if(!children) return;
-			let i=0, child: Element | null = children.container.firstElementChild;
-			while(child) {
+			if (!children) return;
+			let i = 0,
+				child: Element | null = children.container.firstElementChild;
+			while (child) {
 				const nodeID = child.getAttribute(this.dataAttrID);
 				const node = this.nodes.get(nodeID!);
-				if(!node) throw new Error(`Node not found: ${nodeID}`);
+				if (!node) throw new Error(`Node not found: ${nodeID}`);
 				callback(node, i, parent);
 				traverse(node);
 				child = child.nextElementSibling;

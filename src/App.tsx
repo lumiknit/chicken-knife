@@ -11,14 +11,21 @@ const SortableItem = (props: {
 	const [cnt, setCnt] = createSignal(0);
 	return (
 		<div>
-			<input type="text" value={props.data}
-				onChange={(e) => props.setData(e.currentTarget.value)}
+			<input
+				type="text"
+				value={props.data}
+				onChange={e => props.setData(e.currentTarget.value)}
 			/>
-			<button onClick={() => {
-				setCnt(x => x + 1);
-				props.setData(x => x + "a");
-			}}>{cnt()}</button>
-			<button onClick={() => props.s.deleteNodeByID(props.id)}>Delete</button>
+			<button
+				onClick={() => {
+					setCnt(x => x + 1);
+					props.setData(x => x + "a");
+				}}>
+				{cnt()}
+			</button>
+			<button onClick={() => props.s.deleteNodeByID(props.id)}>
+				Delete
+			</button>
 		</div>
 	);
 };
