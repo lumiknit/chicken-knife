@@ -32,6 +32,9 @@ const SortableItem = (props: {
 
 const App: Component = () => {
 	const state = new SortableTreeState<string>(SortableItem, DEFAULT_OPTIONS);
+	state.onChange = s => {
+		console.log(s.convertToNodes());
+	};
 
 	return (
 		<>
